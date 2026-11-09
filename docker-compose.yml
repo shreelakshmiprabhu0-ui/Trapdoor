@@ -1,0 +1,50 @@
+# TRAPDOOR - database + backend part (Student B).
+# Student A adds the frontend service; Student C adds any decoy-related network settings.
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: UTC
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend_net]
+    # No "ports:" on purpose - the database is only reachable from the backend container.
+
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 4000
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+      SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./tests:/tests:ro
+    networks: [backend_net]
+
+networks:
+  backend_net:
+
+volumes:
+  db_data:
