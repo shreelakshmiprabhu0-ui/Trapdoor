@@ -9,7 +9,7 @@ router.use(requireAuth);
 const toNote = (r) => ({
   id: r.id,
   title: r.title,
-  content: r.content,
+  body: r.content,
   createdAt: new Date(r.created_at).toISOString(),
 });
 
@@ -20,7 +20,7 @@ router.get('/', async (req, res, next) => {
       'SELECT id, title, content, created_at FROM notes WHERE user_id = ? ORDER BY id DESC',
       [req.session.user.id]
     );
-    res.json({ user: req.session.user, notes: rows.map(toNote) });
+    res.json({ user: req.session.user, items: rows.map(toNote) });
   } catch (err) {
     next(err);
   }

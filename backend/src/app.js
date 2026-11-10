@@ -35,19 +35,14 @@ app.use(
 app.use(express.json({ limit: '10kb' }));
 
 // ---- server-side sessions (MySQL-backed; in-memory during tests) ----
-let sessionStore; // undefined => express-session MemoryStore
+let sessionStore;
+
 if (!isTest) {
-  const MySQLStore = require('express-mysql-session')(session);
-  sessionStore = new MySQLStore({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    createDatabaseTable: false, // table is defined in database/schema.sql
-    clearExpired: true,
-    checkExpirationInterval: 15 * 60 * 1000,
-    expiration: 30 * 60 * 1000,
+  const MySQLSessionStore = require('./mysqlSessionStore');
+  const db = require('./db');
+
+  sessionStore = new MySQLSessionStore({
+    pool: db.pool,
   });
 }
 

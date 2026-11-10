@@ -1,0 +1,119 @@
+# docker-compose.yml
+#
+# Ownership: Student B -> db and backend service definitions
+#            Student C -> the `networks:` layout and the isolation comments
+#            Student A -> frontend service
+# Student C's changes are marked "[Student C]".
+#
+# Start:  docker compose up --build
+# Stop:   docker compose down
+#
+# ---------------------------------------------------------------------------
+# What the isolation does and does NOT give you (read before the viva)
+# ---------------------------------------------------------------------------
+# There is NO separate decoy container. The trap handlers (trap.routes.js and
+# trapData.js) run inside the backend process and use only static JavaScript
+# data. So the separation is:
+#
+#   Code level  : trap.routes.js and trapData.js never import db.js or read
+#                 environment variables. The only database use on the trap
+#                 path is eventLogger.js, which runs one INSERT into
+#                 security_events. (Checked by tests/isolation.test.js.)
+#
+#   Network     : MySQL sits on `db-net`, an INTERNAL network (no route to the
+#                 outside world). Only the backend is attached to it. The
+#                 frontend container cannot reach MySQL, and MySQL publishes no
+#                 port on the host.
+#
+# What this does NOT do:
+#   - The backend process still holds the MySQL credentials, so a code bug in
+#     the backend could still reach the database. The separation is by design
+#     of the code, not enforced by the operating system.
+#   - The backend is also on `public-net`, so it still has normal outbound
+#     internet access. It is not locked down.
+
+services:
+  # -------------------------------------------------------------------------
+  # MySQL — real application data (Student B)
+  # -------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: trapdoor-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    # [Student C] No `ports:` on purpose. Publishing 3306 would expose the
+    # real database to the host/LAN and does not work on an internal network.
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '-p${DB_ROOT_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - db-net # [Student C] database network only
+
+  # -------------------------------------------------------------------------
+  # Backend — Express gateway: normal routes + trap routes (Student B / C)
+  # -------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trapdoor-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
+    ports:
+      - '5000:5000' # the only browser-facing API port
+    networks:
+      - public-net # [Student C] reachable by the frontend and the host
+      - db-net # [Student C] the only service that can reach MySQL
+
+  # -------------------------------------------------------------------------
+  # Frontend — React (Student A)
+  # -------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: trapdoor-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_USE_MOCK: 'false'
+      VITE_API_PROXY_TARGET: http://backend:5000
+    networks:
+      - public-net # [Student C] NOT on db-net: no path to MySQL
+
+# [Student C] The original single `app-network` left `db` on Compose's default
+# network and `backend` on `app-network`, so the hostname `db` would not
+# resolve. These two networks fix that and make the isolation real.
+networks:
+  public-net:
+    driver: bridge
+  db-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  db-data:
