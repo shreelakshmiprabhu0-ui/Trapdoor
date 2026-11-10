@@ -1,179 +1,245 @@
 # TRAPDOOR
 ### Adaptive Web Application Deception System
 
-TRAPDOOR is a web application deception system that detects and records access to deliberately planted trap routes. It responds to suspicious requests with synthetic decoy data and records the interactions for defenders to investigate.
+TRAPDOOR is a web application deception system designed to simulate sensitive application resources and record suspicious interactions. It provides controlled decoy interfaces, synthetic data, and a centralized security monitoring dashboard to help demonstrate how deception-based security mechanisms can detect and record unauthorized access attempts.
 
-## Project Overview
+The project combines a conventional user portal with deliberately exposed synthetic resources, allowing security events to be captured and reviewed through a dedicated Defender dashboard.
 
-Traditional web applications expose resources and endpoints that may be discovered through reconnaissance. TRAPDOOR introduces deliberately configured deceptive endpoints that imitate sensitive application resources.
-
-When a configured trap route is accessed:
-1. The gateway matches the exact route.
-2. A synthetic response is returned.
-3. The access is recorded as a security event.
-4. Defenders can inspect the event through the dashboard.
-
-**Core workflow:**
-
-Normal Portal → Trap Route Access → Synthetic Response → Event Logging → Defender Dashboard
+---
 
 ## Features
 
-- Normal user authentication and role-based access.
-- Deliberately planted trap endpoints.
-- Synthetic decoy responses.
-- Security event logging in MySQL.
-- Session-based event references.
-- Defender dashboard for viewing trap activity.
-- Docker Compose deployment.
-- Database and frontend network separation.
+### 1. User Portal
+- User authentication and session management.
+- Create, view, edit, and delete personal notes.
+- Search and manage notes.
+- User-specific data access and ownership checks.
+
+### 2. Defender Dashboard
+A centralized interface for monitoring recorded deception activity.
+
+- View total security events.
+- Monitor Admin, Backup, and Config activity.
+- Chronological event history.
+- Filter events by trap category.
+- Search by route, event type, or session reference.
+- Expand event records to inspect available details.
+
+### 3. Deception Interfaces
+
+TRAPDOOR provides three simulated interfaces representing sensitive application resources.
+
+**Fake Admin Console**
+- Simulated administrative login.
+- Synthetic dashboard statistics.
+- Simulated authentication outcomes.
+- Records interactions for security monitoring.
+
+**Backup Explorer**
+- Displays synthetic backup records.
+- Shows filenames, sizes, timestamps, and statuses.
+- Provides simulated backup details.
+- Does not access or download actual backup files.
+
+**Configuration Console**
+- Displays synthetic application configuration.
+- Includes application, database, session, and feature-flag information.
+- Sensitive configuration values are redacted.
+- Read-only simulated interface.
+
+### 4. Security Event Logging
+- Records interactions with configured deception resources.
+- Captures request metadata and event information.
+- Uses session references instead of exposing raw session identifiers.
+- Supports centralized event monitoring through the Defender dashboard.
+
+---
+
+## System Architecture
+
+```text
+                 TRAPDOOR
+                     |
+          +----------+----------+
+          |                     |
+     Normal Portal        Deception Routes
+          |                     |
+     Express Gateway     +------+------+
+          |              |      |      |
+     Authentication    Admin  Backup  Config
+          |              |      |      |
+     Portal Services     +------+------+
+          |                     |
+          |               Synthetic Data
+          |                     |
+          +----------+----------+
+                     |
+                Event Logger
+                     |
+              Security Events
+                     |
+             Defender Dashboard
+```
+
+---
 
 ## Technology Stack
 
 | Component | Technology |
 |---|---|
-| Frontend | React, Vite |
-| Backend | Node.js, Express |
+| Frontend | React.js |
+| Build Tool | Vite |
+| Backend | Node.js |
+| Backend Framework | Express.js |
 | Database | MySQL 8 |
-| Authentication | Express Session, bcrypt |
-| Security | Helmet, CSRF protection |
-| Deployment | Docker, Docker Compose |
+| Containerization | Docker |
+| Orchestration | Docker Compose |
+| Authentication | Server-side sessions |
+| Security | CSRF protection, role-based authorization, Helmet |
 
-## Trap Endpoints
-
-| Endpoint | Description |
-|---|---|
-| `/api/internal/admin` | Synthetic administrative information |
-| `/api/internal/backups` | Synthetic backup listing |
-| `/api/internal/config` | Synthetic configuration information |
-
-These endpoints are deliberately configured traps. Their responses contain synthetic data, not actual application secrets or database records.
+---
 
 ## Project Structure
 
 ```text
-Trapdoor/
+TRAPDOOR/
+│
 ├── backend/
-│   ├── src/
-│   │   ├── app.js
-│   │   ├── auth.js
-│   │   ├── db.js
-│   │   ├── defender.routes.js
-│   │   ├── eventLogger.js
-│   │   ├── mysqlSessionStore.js
-│   │   ├── portal.routes.js
-│   │   ├── server.js
-│   │   ├── trap.routes.js
-│   │   └── trapData.js
-│   ├── Dockerfile
-│   └── package.json
-├── database/
-│   ├── schema.sql
-│   └── seed.sql
-├── docs/
-│   ├── API_CONTRACT.md
-│   └── TEST_AND_DEMO.md
+│   └── src/
+│       ├── app.js
+│       ├── auth.js
+│       ├── db.js
+│       ├── eventLogger.js
+│       ├── portal.routes.js
+│       ├── defender.routes.js
+│       ├── trap.routes.js
+│       └── mysqlSessionStore.js
+│
 ├── frontend/
-│   ├── src/
-│   ├── Dockerfile
-│   └── package.json
+│   └── src/
+│       ├── components/
+│       ├── pages/
+│       │   ├── Login.jsx
+│       │   ├── Portal.jsx
+│       │   ├── Defender.jsx
+│       │   ├── AdminTrap.jsx
+│       │   ├── BackupExplorer.jsx
+│       │   └── ConfigConsole.jsx
+│       ├── AuthContext.jsx
+│       ├── api.js
+│       ├── App.jsx
+│       └── styles.css
+│
+├── database/
+│   └── seed.sql
+│
 ├── docker-compose.yml
 └── README.md
 ```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
+- Git
 - Docker Desktop
 - Docker Compose
-- Git
+- A modern web browser
 
-### Configuration
-
-Create a root `.env` file with the following variables:
-
-```env
-DB_ROOT_PASSWORD=your_root_password
-DB_NAME=trapdoor_db
-DB_USER=trapdoor_user
-DB_PASSWORD=your_database_password
-SESSION_SECRET=your_long_random_session_secret
-```
-
-Use unique, strong values. Never commit `.env` to Git.
-
-### Run with Docker Compose
-
-Clone the repository:
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/shreelakshmiprabhu0-ui/Trapdoor.git
 cd Trapdoor
 ```
 
-Configure the root `.env` file, then run:
+### 2. Configure environment variables
+
+Create a `.env` file in the project root and configure the variables required by `docker-compose.yml` and the backend.
+
+Use secure, locally generated values for database credentials and the session secret. Do not commit `.env` files or secrets to GitHub.
+
+### 3. Start the application
 
 ```bash
 docker compose up --build -d
 ```
 
-Check the services:
+### 4. Access the application
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend health check | http://localhost:5000/api/health |
+| User Portal | http://localhost:5173/portal |
+| Defender Dashboard | http://localhost:5173/defender |
+| Fake Admin | http://localhost:5173/internal/admin |
+| Backup Explorer | http://localhost:5173/internal/backups |
+| Config Console | http://localhost:5173/internal/config |
+
+### 5. Check running containers
 
 ```bash
 docker compose ps
 ```
 
-### Access the Application
-
-| Service | Address |
-|---|---|
-| Frontend | http://localhost:5173 |
-| Backend health | http://localhost:5000/api/health |
-
-## Demo Accounts
-
-The repository includes seeded local demonstration accounts:
-
-| Role | Email |
-|---|---|
-| USER | `demo@trapdoor.local` |
-| DEFENDER | `defender@trapdoor.local` |
-
-Demo passwords are documented in `database/seed.sql`. These accounts are for local demonstrations only.
-
-## Testing
-
-From the backend directory:
+### 6. Stop the application
 
 ```bash
-npm install
-npm test
+docker compose down
 ```
 
-For integration testing, see `docs/TEST_AND_DEMO.md`.
+---
 
-## Security Design and Limitations
+## Authentication and Authorization
 
-- Trap routes return synthetic data.
-- Trap matching uses explicit route definitions.
-- Security events are stored separately from normal portal content.
-- MySQL is not published as a host port.
-- MySQL runs on an internal Docker network shared with the backend.
-- The frontend does not have direct access to the database.
-- Session references use HMAC-derived values rather than exposing raw session identifiers.
+TRAPDOOR implements server-side session-based authentication.
 
-**Limitations:** TRAPDOOR is a deception and monitoring prototype. It does not prevent attacks, perform automated risk scoring, or guarantee isolation from vulnerabilities within the backend process.
+- Passwords are verified using bcrypt.
+- Sessions are stored using a MySQL-backed session store.
+- CSRF protection is applied to state-changing API requests.
+- Role-based authorization protects Defender endpoints.
+- Normal users cannot access Defender-only event monitoring endpoints.
 
-## Documentation
+The application includes separate user and Defender roles.
 
-- [API Contract](docs/API_CONTRACT.md)
-- [Testing and Demo Guide](docs/TEST_AND_DEMO.md)
+---
+
+## Security Considerations
+
+TRAPDOOR is an academic demonstration of web application deception.
+
+- Decoy resources use synthetic data only.
+- No real administrative privileges are granted through the fake Admin Console.
+- No actual backup files are accessed or downloaded.
+- Sensitive configuration values are redacted.
+- Raw session identifiers, cookies, passwords, and authentication tokens should not be included in security event logs.
+- Defender access is enforced on the backend, not merely through frontend navigation.
+
+**Important:** The deception interfaces are simulations and should not be treated as real administrative or infrastructure management systems.
+
+---
+
+## Future Scope
+
+Potential future enhancements include:
+
+- Expanded deception scenarios.
+- More detailed security event analytics.
+- Additional decoy resources.
+- Improved event investigation and reporting.
+- Extended testing and evaluation of deception effectiveness.
+
+---
 
 ## Contributors
 
-Add the project contributors and their respective responsibilities here.
+Developed as an academic Cyber Security project by students of **NMAM Institute of Technology (NMAMIT)**.
+
+---
 
 ## License
 
-Add the selected project license here, if applicable.
+This project is developed for academic and educational purposes.
