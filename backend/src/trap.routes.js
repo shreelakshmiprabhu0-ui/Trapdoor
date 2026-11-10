@@ -55,6 +55,23 @@ async function rejectMethod(req, res) {
   return res.status(405).json({ error: 'Method Not Allowed' });
 }
 
+
+// Browser-facing decoy login. This is deliberately separate from the existing
+// GET /api/internal/admin JSON endpoint. Credentials are never persisted or logged.
+router.post('/api/internal/admin/login', asyncHandler(async (req, res) => {
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim().slice(0, 80) : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const validDemoLogin = username === 'demo_admin' && password === 'TrapdoorDemo!2026';
+  await logTrapAccess(req, {
+    route: '/api/internal/admin/login',
+    method: 'POST',
+    eventType: validDemoLogin ? 'DECOY_ADMIN_LOGIN_SUCCESS' : 'DECOY_ADMIN_LOGIN_FAILURE',
+    details: { username: username || 'blank', outcome: validDemoLogin ? 'simulated_success' : 'simulated_failure' },
+  });
+  res.set('Cache-Control', 'no-store');
+  return res.json({ ok: true, authenticated: validDemoLogin, outcome: validDemoLogin ? 'success' : 'failure' });
+}));
+
 TRAP_PATHS.forEach((trapPath) => {
   router
     .route(trapPath)

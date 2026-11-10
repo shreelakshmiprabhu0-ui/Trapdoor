@@ -51,6 +51,36 @@ router.post('/notes', async (req, res, next) => {
   }
 });
 
+
+// PUT /api/portal/notes/:id { title, content } - owner only
+router.put('/notes/:id', async (req, res, next) => {
+  try {
+    if (!/^\d{1,10}$/.test(req.params.id)) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid note id.');
+    }
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const content = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    if (title.length < 1 || title.length > 100) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Title must be 1-100 characters.');
+    }
+    if (content.length > 1000) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Content must be at most 1000 characters.');
+    }
+    const [result] = await db.pool.execute(
+      'UPDATE notes SET title = ?, content = ? WHERE id = ? AND user_id = ?',
+      [title, content, Number(req.params.id), req.session.user.id]
+    );
+    if (result.affectedRows === 0) return sendError(res, 404, 'NOT_FOUND', 'Note not found.');
+    const rows = await db.query(
+      'SELECT id, title, content, created_at FROM notes WHERE id = ? AND user_id = ?',
+      [Number(req.params.id), req.session.user.id]
+    );
+    res.json({ note: toNote(rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/portal/notes/:id - owner only
 router.delete('/notes/:id', async (req, res, next) => {
   try {
