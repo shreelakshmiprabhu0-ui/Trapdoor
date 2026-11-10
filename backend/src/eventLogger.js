@@ -14,10 +14,10 @@
  *   route        the exact trap path (no query string)
  *   method       the HTTP method
  *   session_ref  a one-way reference to the session (see safeSessionRef)
- *   details      JSON: { userAgent } only, cut to 200 characters
+ *   details      JSON: userAgent plus explicitly supplied safe metadata
  *
  * What is NEVER stored: passwords, cookies, session IDs, tokens,
- * Authorization headers, request bodies, query strings or IP addresses.
+ * Authorization headers, raw request bodies, query strings or IP addresses.
  */
 
 const crypto = require('crypto');
@@ -88,20 +88,24 @@ function safeSessionRef(req) {
  * @param {object} req  Express request
  * @returns {Promise<void>}
  */
-async function logTrapAccess(req) {
+async function logTrapAccess(req, options = {}) {
   const userAgent = String(req.get('user-agent') || 'unknown').slice(0, MAX_USER_AGENT_LENGTH);
 
   // Parameterized SQL: values are passed separately and never joined into
   // the SQL text.
+  const eventType = options.eventType || EVENT_TYPE;
+  const details = options.details
+    ? { ...options.details, userAgent }
+    : { userAgent };
   const sql =
     'INSERT INTO security_events (event_type, route, method, session_ref, details) ' +
     'VALUES (?, ?, ?, ?, ?)';
   const params = [
-    EVENT_TYPE,
-    req.path,
-    req.method,
+    eventType,
+    options.route || req.path,
+    options.method || req.method,
     safeSessionRef(req),
-    JSON.stringify({ userAgent }),
+    JSON.stringify(details),
   ];
 
   try {
