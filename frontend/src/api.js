@@ -16,35 +16,85 @@ const wait = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 
 /* ---------- real API ---------- */
 
+let csrfToken = null;
+
 async function request(path, options = {}) {
   let res;
+
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    };
+
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(options.method || 'GET')) {
+      if (!csrfToken && path !== '/api/auth/csrf') {
+        const csrfResponse = await fetch('/api/auth/csrf', {
+          credentials: 'include',
+        });
+
+        if (!csrfResponse.ok) {
+          throw new Error('Could not obtain CSRF token.');
+        }
+
+        const csrfBody = await csrfResponse.json();
+        csrfToken = csrfBody.csrfToken;
+      }
+
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+    }
+
     res = await fetch(path, {
-      credentials: 'include', // send the server-side session cookie
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       ...options,
+      headers,
     });
   } catch {
-    throw new ApiError(0, 'Cannot reach the server. Check that the backend is running.');
+    throw new ApiError(0, 'Cannot reach the server or obtain a CSRF token.');
   }
 
   let body = null;
-  try { body = await res.json(); } catch { /* empty body */ }
+
+  try {
+    body = await res.json();
+  } catch {
+    // Empty response, such as logout.
+  }
 
   if (!res.ok) {
-    throw new ApiError(res.status, body?.error || body?.message || `Request failed (${res.status})`);
+    throw new ApiError(
+      res.status,
+      body?.error || body?.message || `Request failed (${res.status})`
+    );
   }
+
+  // Login regenerates the session and returns a fresh CSRF token.
+  if (body?.csrfToken) {
+    csrfToken = body.csrfToken;
+  }
+
   return body;
 }
 
 const real = {
   login: (email, password) =>
-    request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  logout: () => request('/api/auth/logout', { method: 'POST' }),
+    request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  logout: () =>
+    request('/api/auth/logout', { method: 'POST' }),
+
   me: () => request('/api/auth/me'),
+
   getPortal: () => request('/api/portal'),
+
   getEvents: () => request('/api/defender/events'),
 };
+
 
 /* ---------- mock API ---------- */
 
