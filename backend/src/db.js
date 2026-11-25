@@ -83,17 +83,34 @@ async function saveSecurityEvent({ eventType, route, method, sessionRef = null, 
 }
 
 /** Newest first. Used by defender.routes.js. */
+
 async function listSecurityEvents({ limit = 50, offset = 0 } = {}) {
   const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
   const off = Math.max(parseInt(offset, 10) || 0, 0);
-  // LIMIT/OFFSET are validated integers, inlined because prepared LIMIT ? is unreliable in MySQL 8.
+
   const rows = await query(
     `SELECT id, event_type, route, method, session_ref, created_at, details
-       FROM security_events ORDER BY id DESC LIMIT ${lim} OFFSET ${off}`
+     FROM security_events
+     ORDER BY id DESC
+     LIMIT ${lim} OFFSET ${off}`
   );
-  const [{ total }] = await query('SELECT COUNT(*) AS total FROM security_events');
+
+  const [stats] = await query(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN route LIKE '%/admin%' THEN 1 ELSE 0 END) AS admin,
+      SUM(CASE WHEN route LIKE '%/backups%' THEN 1 ELSE 0 END) AS backups,
+      SUM(CASE WHEN route LIKE '%/config%' THEN 1 ELSE 0 END) AS config
+    FROM security_events
+  `);
+
   return {
-    total,
+    total: Number(stats.total),
+    stats: {
+      admin: Number(stats.admin),
+      backups: Number(stats.backups),
+      config: Number(stats.config),
+    },
     events: rows.map((r) => ({
       id: r.id,
       eventType: r.event_type,

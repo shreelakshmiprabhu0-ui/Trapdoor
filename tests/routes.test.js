@@ -46,13 +46,40 @@ function buildMockApp() {
   const express = require('express');
   const session = require('express-session');
   const trapRouter = require('../backend/src/trap.routes');
+  const trapInteractionRouter = require('../backend/src/trap-interaction.routes');
 
   const app = express();
   app.use(express.json());
   app.use(session({ secret: 'test-only-secret', resave: false, saveUninitialized: false }));
+
+  // Original anonymous decoy routes run before CSRF protection.
   app.use(trapRouter);
-  // Test stub standing in for Student B's portal. Not part of the product.
-  app.get('/api/portal', (_req, res) => res.json({ items: [{ id: 1, title: 'stub real note' }] }));
+
+  // Test-only CSRF middleware simulating the real middleware's placement.
+  app.use((req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+
+    if (req.get('x-csrf-token') !== req.session?.csrfToken) {
+      return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+
+    next();
+  });
+
+  // New interaction endpoints run after CSRF protection.
+  app.use(trapInteractionRouter);
+
+  // Test stub standing in for Student B's portal.
+  app.get('/api/portal', (_req, res) =>
+    res.json({ items: [{ id: 1, title: 'stub real note' }] })
+  );
+
+  // Gives mocked tests a valid CSRF token.
+  app.get('/__test/csrf', (req, res) => {
+    req.session.csrfToken = 'test-csrf-token';
+    res.json({ csrfToken: req.session.csrfToken });
+  });
+
   return app;
 }
 
@@ -234,7 +261,6 @@ describeMocked('[MOCKED] Trap routes - event recording', () => {
     errorSpy.mockRestore();
   });
 });
-
 // ---------------------------------------------------------------------------
 // [MOCKED] Student B compatibility: accepted shapes of db.js
 // ---------------------------------------------------------------------------
@@ -364,5 +390,62 @@ describeIntegration('[INTEGRATION] Trap routes against the real backend', () => 
     expect(mine[0].eventType).toBe('TRAP_ROUTE_ACCESSED');
     expect(mine[0].route).toBe('/api/internal/backups');
     expect(mine[0].method).toBe('GET');
+  });
+  test('interaction endpoints reject requests without CSRF protection', async () => {
+    const { agent } = await login(
+      process.env.TEST_USER_EMAIL,
+      process.env.TEST_USER_PASSWORD
+    );
+
+    const adminRes = await agent
+      .post('/api/internal/admin/page-access')
+      .send({});
+
+    const backupRes = await agent
+      .post('/api/internal/backups/details')
+      .send({
+        filename: getDecoyResponse('/api/internal/backups').backups[0].filename,
+      });
+
+    expect(adminRes.status).toBe(403);
+    expect(backupRes.status).toBe(403);
+  });
+
+  test('valid CSRF requests can record admin page and backup detail interactions', async () => {
+    const { agent, headers } = await login(
+      process.env.TEST_USER_EMAIL,
+      process.env.TEST_USER_PASSWORD
+    );
+
+    const filename = getDecoyResponse('/api/internal/backups').backups[0].filename;
+
+    const adminRes = await agent
+      .post('/api/internal/admin/page-access')
+      .set(headers);
+
+    const backupRes = await agent
+      .post('/api/internal/backups/details')
+      .set(headers)
+      .send({ filename });
+
+    expect(adminRes.status).toBe(200);
+    expect(adminRes.body).toEqual({ ok: true });
+
+    expect(backupRes.status).toBe(200);
+    expect(backupRes.body).toEqual({ ok: true });
+  });
+
+  test('backup details rejects filenames outside the synthetic backup list', async () => {
+    const { agent, headers } = await login(
+      process.env.TEST_USER_EMAIL,
+      process.env.TEST_USER_PASSWORD
+    );
+
+    const res = await agent
+      .post('/api/internal/backups/details')
+      .set(headers)
+      .send({ filename: '../../real-secret.sql' });
+
+    expect(res.status).toBe(400);
   });
 });
