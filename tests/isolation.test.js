@@ -76,7 +76,21 @@ describe('[STATIC] Decoy code never touches the real database', () => {
     );
     expect(codeOnly('backend/src/trap.routes.js')).not.toMatch(/process\.env/);
   });
+  test('trap-interaction.routes.js stays separate and is mounted after CSRF protection', () => {
+  expect(requiredModules('backend/src/trap-interaction.routes.js').sort()).toEqual(
+    ['./eventLogger', './trapData', 'express'].sort()
+  );
 
+  const appCode = codeOnly('backend/src/app.js');
+
+  expect(appCode).toMatch(/app\.use\(trapInteractionRoutes\)/);
+
+  const csrfMountIndex = appCode.indexOf("app.use('/api', auth.csrfProtection)");
+  const interactionMountIndex = appCode.indexOf('app.use(trapInteractionRoutes)');
+
+  expect(csrfMountIndex).toBeGreaterThanOrEqual(0);
+  expect(interactionMountIndex).toBeGreaterThan(csrfMountIndex);
+});
   test('eventLogger.js only imports crypto and db.js', () => {
     expect(requiredModules('backend/src/eventLogger.js').sort()).toEqual(['./db', 'crypto']);
   });
@@ -354,7 +368,11 @@ describeIntegration('[INTEGRATION] Isolation and safe logging against the real b
     }
     const res = await agent.post('/api/auth/login').set(headers).send({ email, password });
     collect(res);
+
     if (res.status !== 200) throw new Error(`Login failed for ${email} (HTTP ${res.status})`);
+
+    headers['x-csrf-token'] = res.body.csrfToken;
+
     return { agent, headers, res, cookieValues };
   }
 

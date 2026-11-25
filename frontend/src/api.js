@@ -21,7 +21,6 @@ let csrfToken = null;
 let csrfTokenPromise = null;
 
 // Obtain a CSRF token for the current session.
-// Concurrent requests share the same token-fetch operation.
 async function getCsrfToken(forceRefresh = false) {
   if (forceRefresh) {
     csrfToken = null;
@@ -60,14 +59,12 @@ async function readResponseBody(response) {
   try {
     return await response.json();
   } catch {
-    // Empty response, such as logout.
     return null;
   }
 }
 
 async function request(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
-
   const needsCsrf = !['GET', 'HEAD', 'OPTIONS'].includes(method);
 
   const headers = {
@@ -97,8 +94,7 @@ async function request(path, options = {}) {
     res = await sendRequest();
     body = await readResponseBody(res);
 
-    // If the session and token are out of sync,
-    // fetch a fresh token and retry only once.
+    // Refresh a stale CSRF token and retry once.
     if (
       needsCsrf &&
       res.status === 403 &&
@@ -124,7 +120,6 @@ async function request(path, options = {}) {
     );
   }
 
-  // Successful login returns a fresh token after session regeneration.
   if (body?.csrfToken) {
     csrfToken = body.csrfToken;
     csrfTokenPromise = null;
@@ -146,7 +141,6 @@ const real = {
         method: 'POST',
       });
     } finally {
-      // The previous session has been destroyed.
       csrfToken = null;
       csrfTokenPromise = null;
     }
@@ -184,8 +178,20 @@ const real = {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
-};
 
+  // NEW: Record fake admin page access.
+  recordAdminPageAccess: () =>
+    request('/api/internal/admin/page-access', {
+      method: 'POST',
+    }),
+
+  // NEW: Record opening a synthetic backup's details.
+  recordBackupDetails: (filename) =>
+    request('/api/internal/backups/details', {
+      method: 'POST',
+      body: JSON.stringify({ filename }),
+    }),
+};
 
 /* ---------- mock API ---------- */
 
@@ -317,10 +323,7 @@ const mock = {
       throw new ApiError(404, 'Note not found.');
     }
 
-    Object.assign(n, {
-      title,
-      body: content,
-    });
+    Object.assign(n, { title, body: content });
 
     return { note: n };
   },
@@ -368,6 +371,17 @@ const mock = {
       authenticated,
       outcome: authenticated ? 'success' : 'failure',
     };
+  },
+
+  // Mock implementations for the new methods.
+  async recordAdminPageAccess() {
+    await wait(100);
+    return { ok: true };
+  },
+
+  async recordBackupDetails(filename) {
+    await wait(100);
+    return { ok: true };
   },
 };
 
