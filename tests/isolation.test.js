@@ -354,7 +354,11 @@ describeIntegration('[INTEGRATION] Isolation and safe logging against the real b
     }
     const res = await agent.post('/api/auth/login').set(headers).send({ email, password });
     collect(res);
+
     if (res.status !== 200) throw new Error(`Login failed for ${email} (HTTP ${res.status})`);
+
+    headers['x-csrf-token'] = res.body.csrfToken;
+
     return { agent, headers, res, cookieValues };
   }
 

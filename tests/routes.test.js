@@ -298,7 +298,11 @@ describeIntegration('[INTEGRATION] Trap routes against the real backend', () => 
       headers['x-csrf-token'] = csrf.body.csrfToken;
     }
     const res = await agent.post('/api/auth/login').set(headers).send({ email, password });
+
     if (res.status !== 200) throw new Error(`Login failed for ${email} (HTTP ${res.status})`);
+
+    headers['x-csrf-token'] = res.body.csrfToken;
+
     return { agent, headers };
   }
 

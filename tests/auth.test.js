@@ -121,6 +121,11 @@ describeIntegration('[INTEGRATION] Login and defender authorization (Student B b
       headers['x-csrf-token'] = csrf.body.csrfToken;
     }
     const res = await agent.post('/api/auth/login').set(headers).send({ email, password });
+
+    if (res.status === 200) {
+      headers['x-csrf-token'] = res.body.csrfToken;
+    }
+
     return { agent, headers, res };
   }
 
@@ -173,7 +178,7 @@ describeIntegration('[INTEGRATION] Login and defender authorization (Student B b
     expect((await agent.get('/api/defender/events')).status).toBe(200);
 
     const logout = await agent.post('/api/auth/logout').set(headers);
-    expect(logout.status).toBe(200);
+    expect(logout.status).toBe(204);
 
     expect((await agent.get('/api/defender/events')).status).toBe(401);
   });
