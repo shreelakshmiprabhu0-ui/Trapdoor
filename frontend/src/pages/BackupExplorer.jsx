@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import Status from '../components/Status.jsx';
 
@@ -14,8 +14,13 @@ export default function BackupExplorer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [detailError, setDetailError] = useState('');
+  const backupsRequestStarted = useRef(false);
 
   useEffect(() => {
+    if (backupsRequestStarted.current) return;
+
+    backupsRequestStarted.current = true;
+
     api.getBackups()
       .then((data) => setBackups(data.backups || []))
       .catch((e) => setError(e.message))

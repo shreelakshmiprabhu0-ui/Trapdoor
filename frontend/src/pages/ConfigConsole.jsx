@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import Status from '../components/Status.jsx';
 
@@ -40,24 +40,16 @@ export default function ConfigConsole() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
+  const configRequestStarted = useRef(false);
   useEffect(() => {
-    let active = true;
+    if (configRequestStarted.current) return;
+
+    configRequestStarted.current = true;
 
     api.getConfig()
-      .then((data) => {
-        if (active) setConfig(data);
-      })
-      .catch((err) => {
-        if (active) setError(err.message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+      .then((data) => setConfig(data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
   const app = config?.app || {};
